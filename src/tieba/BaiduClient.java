@@ -60,6 +60,39 @@ public class BaiduClient {
 	}
 
 	/**
+	 * 签到
+	 * 
+	 * @param tieBaName
+	 * @throws Exception
+	 */
+	public boolean signIn(String tieBaName, String tbs) throws Exception {
+		URL url = new URL("http://tieba.baidu.com/sign/add");
+		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+		connection.setRequestProperty("Cookie", createCookies());
+		connection.setRequestMethod("POST");
+		connection.setDoOutput(true);
+
+		StringBuffer requestContent = new StringBuffer();
+		requestContent.append("ie=utf-8");
+		requestContent.append("&kw=" + encode(tieBaName));
+		requestContent.append("&tbs=" + tbs);
+
+		PrintWriter writer = new PrintWriter(connection.getOutputStream());
+		writer.write(requestContent.toString());
+		writer.flush();
+
+		String respondContent = HtmlUtil.getRespondContent(connection);
+		JSONObject jsonObject = new JSONObject(respondContent);
+
+		if (jsonObject.getInt("no") != 0) {
+			System.out.println("签到失败");
+			return false;
+		}
+		System.out.println("签到成功");
+		return true;
+	}
+
+	/**
 	 * 进入贴吧
 	 * 
 	 * @param tieBaName
@@ -68,7 +101,7 @@ public class BaiduClient {
 	 */
 	public List<Post> toTieBa(String tieBaName) throws Exception {
 		URL url = new URL("http://tieba.baidu.com/f?ie=utf-8&kw="
-				+ encode(tieBaName));
+				+ encode(tieBaName) + "&pn=0");
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		connection.addRequestProperty("Cookie", createCookies());
 
@@ -79,7 +112,7 @@ public class BaiduClient {
 
 		// System.out.println(cookies);
 
-		System.out.println("--------帖子列表---------");
+		System.out.println("--------帖子列表(" + tieBaName + "吧)---------");
 
 		// 获取帖子列表
 		String html = HtmlUtil.getRespondContent(connection);
@@ -127,7 +160,15 @@ public class BaiduClient {
 			System.out.println(postList.get(i));
 		}
 
-		// 进入第一贴
+		// 获取页面中的参数tbs
+		Parser parser = new Parser(html);
+		NodeList scriptList = parser.parse(new TagNameFilter("script"));
+		String tbs = HtmlUtil.getTbsFromScript(scriptList);
+
+		// 签到
+		signIn(tieBaName, tbs);
+
+		// 进入第一贴并回复
 		long postId = postList.get(0).getId();
 		System.out.println("------进入帖子(" + postId + ")------");
 		toPost(tieBaName, postId);
@@ -135,10 +176,8 @@ public class BaiduClient {
 		// 获取首页回复为0的帖子 并自动回复
 		// for (int i = 0; i < postList.size(); i++) {
 		// Post post = postList.get(i);
-		//
 		// if (post.getReplyNum() == 0)
 		// toPost(tieBaName, post.getId());
-		//
 		// }
 
 		return postList;
@@ -155,48 +194,15 @@ public class BaiduClient {
 		connection.setRequestProperty("Cookie", createCookies());
 
 		Parser parser = new Parser(connection);
-		NodeList nodeList = parser.parse(new TagNameFilter("script"));
-		// 获取含有fid的js
-		StringBuffer script1 = null;
-		for (int i = 0; i < nodeList.size(); i++)
-			if (nodeList.elementAt(i).toHtml().indexOf("fid") != -1) {
-				script1 = new StringBuffer(nodeList.elementAt(i).getChildren()
-						.toHtml());
-				break;
-			}
-		// System.out.println(script1);
-
-		StringBuffer dataStr = new StringBuffer(script1.substring(
-				script1.indexOf(",data :") + 7,
-				script1.indexOf("},radarData :")));
-		dataStr.delete(dataStr.indexOf("["), dataStr.indexOf("]") + 1);
-		JSONObject dataJson = new JSONObject(dataStr.toString());
-		System.out.println(dataJson);
-		System.out.println("fid=" + dataJson.getString("fid"));
-		System.out.println("tid=" + dataJson.getString("tid"));
-		System.out.println("floor_num=" + dataJson.getString("floor_num"));
-
-		String fid = dataJson.getString("fid");
-
-		// 获取含有uname的js(含有tbs)
-		StringBuffer script2 = null;
-		for (int i = 0; i < nodeList.size(); i++)
-			if (nodeList.elementAt(i).toHtml().indexOf("uname") != -1) {
-				script2 = new StringBuffer(nodeList.elementAt(i).getChildren()
-						.toHtml());
-				break;
-			}
-
-		JSONObject tbsJason = new JSONObject(script2.substring(
-				script2.indexOf("{"), script2.indexOf("}") + 1));
-		System.out.println(tbsJason);
-		String tbs = tbsJason.getString("tbs");
-		System.out.println("tbs=" + tbs);
+		NodeList scriptList = parser.parse(new TagNameFilter("script"));
+		// 获取网页中的参数fid和tbs(发帖要用)
+		String fid = HtmlUtil.getFidFromScript(scriptList);
+		String tbs = HtmlUtil.getTbsFromScript(scriptList);
 
 		// 要回复的内容
 		StringBuffer content = new StringBuffer();
-		content.append("这是2楼?\r\n");
-		content.append("自动回复时间:" + new Date().toString() + "\r\n");
+		content.append("自动回复<br>");
+		content.append("时间:" + new Date().toString() + "<br>");
 		content.append("User-Agent:Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.76 Safari/537.36\n");
 
 		postMessage(tieBaName, postId, content.toString(), fid, tbs);
@@ -405,14 +411,6 @@ public class BaiduClient {
 	 */
 	public String getSystemTime() {
 		return "" + Calendar.getInstance().getTimeInMillis();
-	}
-
-	public static void main(String[] args) throws Exception {
-		BaiduClient client = new BaiduClient("13652218916", "cwc19940302");
-		client.login();
-		System.out.println("--------进入贴吧--------");
-		client.toTieBa("蒙其d小伟");
-
 	}
 
 }

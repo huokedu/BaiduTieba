@@ -1,8 +1,10 @@
 package tieba;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
@@ -19,6 +21,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 
 import tieba.bean.Post;
+import tieba.util.BaiduClientUtil;
 import tieba.util.HtmlUtil;
 import tieba.util.HttpUtil;
 
@@ -29,7 +32,9 @@ import tieba.util.HttpUtil;
  * 
  */
 public class BaiduClient {
-
+	/**
+	 * sessionId
+	 */
 	String baiduId;
 	String token;
 
@@ -45,7 +50,7 @@ public class BaiduClient {
 	boolean logined = false;
 
 	/**
-	 * 帐号
+	 * 用户名
 	 */
 	String userName;
 	/**
@@ -60,18 +65,73 @@ public class BaiduClient {
 	}
 
 	/**
+	 * 获取关注的贴吧列表
+	 * 
+	 * @return
+	 * @throws IOException
+	 */
+	public List<String> getTieBaList() throws IOException {
+		List<String> tieBaList = new ArrayList<>();
+		URL url = new URL("http://tieba.baidu.com/");
+		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+		connection.setRequestProperty("Cookie", createCookies());
+
+		Document document = Jsoup.parse(HtmlUtil.getRespondContent(connection));
+		Elements elements = document.getElementsByAttribute("data-likeflag");
+
+		for (int i = 0; i < elements.size(); i++) {
+			System.out.println(elements.get(i).text());
+		}
+
+		return tieBaList;
+	}
+
+	/**
+	 * 获取签到信息
+	 * 
+	 * @param tieBaName
+	 * @return
+	 * @throws IOException
+	 */
+	public JSONObject getSignInfo(String tieBaName) throws IOException {
+		URL url = new URL("http://tieba.baidu.com/sign/loadmonth?kw="
+				+ encode(tieBaName) + "&ie=utf-8&t=0.5714449905790389");
+		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+		connection.setRequestProperty("Cookie", createCookies());
+		JSONObject respondJson = new JSONObject(
+				HtmlUtil.getRespondContent(connection));
+
+		System.out.println(respondJson);
+
+		JSONObject data = respondJson.getJSONObject("data");
+		JSONObject signUserInfo = data.getJSONObject("sign_user_info");
+
+		System.out.println("连续签到=" + signUserInfo.getInt("sign_keep"));
+		System.out.println("共签到=" + signUserInfo.getInt("sign_total"));
+		System.out.println("今日签到排名=" + signUserInfo.getInt("rank"));
+		return respondJson;
+	}
+
+	/**
 	 * 签到
 	 * 
 	 * @param tieBaName
 	 * @throws Exception
 	 */
-	public boolean signIn(String tieBaName, String tbs) throws Exception {
+	public boolean signIn(String tieBaName) throws Exception {
+		System.out.println("---------开始签到(" + tieBaName + ")---------");
+		// 获取页面中的参数tbs(签到要用)
+		String tbs = BaiduClientUtil.getTbsFromUrl(
+				"http://tieba.baidu.com/f?ie=utf-8&kw=" + encode(tieBaName),
+				createCookies());
+
+		// 签到
 		URL url = new URL("http://tieba.baidu.com/sign/add");
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		connection.setRequestProperty("Cookie", createCookies());
 		connection.setRequestMethod("POST");
 		connection.setDoOutput(true);
-
+		// 构造请求正文
 		StringBuffer requestContent = new StringBuffer();
 		requestContent.append("ie=utf-8");
 		requestContent.append("&kw=" + encode(tieBaName));
@@ -100,6 +160,7 @@ public class BaiduClient {
 	 * @throws Exception
 	 */
 	public List<Post> toTieBa(String tieBaName) throws Exception {
+		System.out.println("----------进入贴吧(" + tieBaName + ")---------");
 		URL url = new URL("http://tieba.baidu.com/f?ie=utf-8&kw="
 				+ encode(tieBaName) + "&pn=0");
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -111,84 +172,29 @@ public class BaiduClient {
 		tieBaUId = HttpUtil.getCookieValue(cookies, "TIEBAUID");
 
 		// System.out.println(cookies);
-
 		System.out.println("--------帖子列表(" + tieBaName + "吧)---------");
 
-		// 获取帖子列表
 		String html = HtmlUtil.getRespondContent(connection);
-		Document document = Jsoup.parse(html);
-		Elements elements = document.getElementsByAttributeValueMatching(
-				"class", "j_thread_list clearfix.*");
 
-		List<Post> postList = new ArrayList<>();
-		for (int i = 0; i < elements.size(); i++) {
-			// System.out.println(elements.get(i).attr("data-field"));
-			JSONObject jsonObject = new JSONObject(elements.get(i).attr(
-					"data-field"));
-			// 获取id
-			long id = jsonObject.getLong("id");
-			// 获取发帖者
-			String authorName = jsonObject.getString("author_name");
-			// 获取回复数量
-			long replyNum = jsonObject.getLong("reply_num");
-			// 获取标题
-			String title = elements.get(i)
-					.getElementsByAttributeValue("class", "j_th_tit").get(0)
-					.text();
-			// 获取内容
-			String content = elements
-					.get(i)
-					.getElementsByAttributeValue("class",
-							"threadlist_abs threadlist_abs_onlyline").get(0)
-					.text();
-			// 最后回复者
-			String lastReplyer = elements.get(i)
-					.getElementsByAttributeValue("class", "j_user_card").get(0)
-					.text();
-			// 最后回复时间
-			String lastReplyTime = elements
-					.get(i)
-					.getElementsByAttributeValue("class",
-							"threadlist_reply_date j_reply_data").get(0).text();
-
-			Post post = new Post(id, authorName, replyNum, title, content,
-					lastReplyer, lastReplyTime);
-			postList.add(post);
-		}
-
+		// 获取帖子列表
+		List<Post> postList = BaiduClientUtil.getPostList(html);
 		for (int i = 0; i < postList.size(); i++) {
 			System.out.println(postList.get(i));
 		}
-
-		// 获取页面中的参数tbs
-		Parser parser = new Parser(html);
-		NodeList scriptList = parser.parse(new TagNameFilter("script"));
-		String tbs = HtmlUtil.getTbsFromScript(scriptList);
-
-		// 签到
-		signIn(tieBaName, tbs);
-
-		// 进入第一贴并回复
-		long postId = postList.get(0).getId();
-		System.out.println("------进入帖子(" + postId + ")------");
-		toPost(tieBaName, postId);
-
-		// 获取首页回复为0的帖子 并自动回复
-		// for (int i = 0; i < postList.size(); i++) {
-		// Post post = postList.get(i);
-		// if (post.getReplyNum() == 0)
-		// toPost(tieBaName, post.getId());
-		// }
 
 		return postList;
 	}
 
 	/**
-	 * 根据帖子id进入帖子
+	 * 根据帖子id进入帖子 返回参数fid和tbs
 	 * 
+	 * @param tieBaName
 	 * @param postId
+	 * @return
+	 * @throws Exception
 	 */
-	public void toPost(String tieBaName, long postId) throws Exception {
+	public JSONObject toPost(String tieBaName, long postId) throws Exception {
+		System.out.println("---------进入帖子----------");
 		URL url = new URL("http://tieba.baidu.com/p/" + postId);
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		connection.setRequestProperty("Cookie", createCookies());
@@ -196,16 +202,14 @@ public class BaiduClient {
 		Parser parser = new Parser(connection);
 		NodeList scriptList = parser.parse(new TagNameFilter("script"));
 		// 获取网页中的参数fid和tbs(发帖要用)
-		String fid = HtmlUtil.getFidFromScript(scriptList);
-		String tbs = HtmlUtil.getTbsFromScript(scriptList);
+		String fid = BaiduClientUtil.getFidFromScript(scriptList);
+		String tbs = BaiduClientUtil.getTbsFromScript(scriptList);
 
-		// 要回复的内容
-		StringBuffer content = new StringBuffer();
-		content.append("自动回复<br>");
-		content.append("时间:" + new Date().toString() + "<br>");
-		content.append("User-Agent:Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.76 Safari/537.36\n");
+		JSONObject jsonObject = new JSONObject();
+		jsonObject.put("fid", fid);
+		jsonObject.put("tbs", tbs);
 
-		postMessage(tieBaName, postId, content.toString(), fid, tbs);
+		return jsonObject;
 	}
 
 	/**
@@ -214,7 +218,7 @@ public class BaiduClient {
 	 * @param postId
 	 * @param msg
 	 */
-	public boolean postMessage(String kw, long postId, String content,
+	public boolean reply(String tieBaName, long postId, String content,
 			String fid, String tbs) throws Exception {
 		URL url = new URL("http://tieba.baidu.com/f/commit/post/add");
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -224,7 +228,7 @@ public class BaiduClient {
 		// 构造请求正文
 		StringBuffer requestContent = new StringBuffer();
 		requestContent.append("ie=utf-8");
-		requestContent.append("&kw=" + encode(kw)); // 贴吧名
+		requestContent.append("&kw=" + encode(tieBaName)); // 贴吧名
 		requestContent.append("&fid=" + fid);
 		requestContent.append("&tid=" + postId);// 帖子id
 		requestContent.append("&vcode_md5=");
@@ -247,10 +251,10 @@ public class BaiduClient {
 		System.out.println(respondJson);
 
 		if (respondJson.getInt("no") != 0) {
-			System.out.println("发帖失败");
+			System.out.println("回复失败");
 			return false;
 		}
-		System.out.println("发贴成功");
+		System.out.println("回复成功");
 		return true;
 	}
 

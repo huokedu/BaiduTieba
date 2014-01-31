@@ -1,17 +1,38 @@
 package tieba;
 
+import java.util.Date;
+import java.util.List;
+
+import org.json.JSONObject;
+
+import tieba.bean.Post;
+
 public class Test {
 
 	public static void main(String[] args) throws Exception {
-		BaiduClient client = new BaiduClient("13652218916", "cwc19940302");
-		client.login();
-		System.out.println("--------进入贴吧--------");
-		client.toTieBa("蒙其d小伟");
+		// 要回复的内容
+		StringBuffer content = new StringBuffer();
+		content.append("自动回复<br>");
+		content.append("时间:" + new Date().toString() + "<br>");
+		content.append("User-Agent:Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.76 Safari/537.36\n");
 
-		// String string =
-		// "\\n\\n_.Module.use('ihome/component/UserVisitCard',{'uname':'蒙其D小伟','is_login':1,'tbs':'4ace9ff3f4b4e00c1391071405'});\\n\\n";
-		// System.out.println(string
-		// .matches("\\n*.+'uname':.+,'is_login':.+,'tbs':.+\\n*"));
+		String userName = "13652218916";
+		String password = "cwc19940302";
+		BaiduClient client = new BaiduClient(userName, password);
+		client.login();
+		
+		client.getTieBaList();
+		
+//		String tieBaName = "java吧";
+//
+//		client.getSignInfo(tieBaName);
+		// client.signIn(tieBaName);
+
+		// List<Post> postList = client.toTieBa(tieBaName);
+		// JSONObject jsonObject = client.toPost(tieBaName, postList.get(0)
+		// .getId());
+		// client.reply(tieBaName, postList.get(0).getId(), content.toString(),
+		// jsonObject.getString("fid"), jsonObject.getString("tbs"));
 
 	}
 }

@@ -42,8 +42,7 @@ public class BaiduClientUtil {
 		URL url = new URL(urlStr);
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		connection.setRequestProperty("Cookie", cookies);
-		String html = HtmlUtil.getRespondContent(connection);
-		Parser parser = new Parser(html);
+		Parser parser = new Parser(connection);
 		NodeList scriptList = parser.parse(new TagNameFilter("script"));
 		String tbs = BaiduClientUtil.getTbsFromScript(scriptList);
 		return tbs;
@@ -58,25 +57,24 @@ public class BaiduClientUtil {
 	 */
 	public static String getTbsFromScript(NodeList scriptList)
 			throws ParserException {
-		System.out.println("获取参数tbs");
+		// System.out.println("获取参数tbs");
 		String tbs = null;
 		// 获取相应的js段
 		StringBuffer script = null;
 		for (int i = 0; i < scriptList.size(); i++) {
-			// System.out.println(Math.random());
 			String html = scriptList.elementAt(i).toHtml();
-			if (html.matches("[\\s\\S]*.+'uname':.+,'is_login':.+,'tbs':.+[\\s\\S]*")) {
+			if (html.indexOf("'is_login':1,'tbs':'") != -1) {
 				script = new StringBuffer(scriptList.elementAt(i).toHtml());
 				break;
 			}
 		}
 
-		System.out.println(script);
+		// System.out.println(script);
 		JSONObject jsonObject = new JSONObject(script.substring(
 				script.indexOf("{"), script.indexOf("}") + 1));
 		// System.out.println(jsonObject);
 		tbs = jsonObject.getString("tbs");
-		System.out.println("tbs=" + tbs);
+		// System.out.println("tbs=" + tbs);
 		return tbs;
 	}
 
@@ -87,27 +85,25 @@ public class BaiduClientUtil {
 	 * @return
 	 */
 	public static String getFidFromScript(NodeList scriptList) {
-		System.out.println("获取参数fid");
+		// System.out.println("获取参数fid");
 		String fid = null;
 		StringBuffer script = null;
 		// 获取相应的js段
 		for (int i = 0; i < scriptList.size(); i++) {
-			// System.out.println(Math.random());
 			String html = scriptList.elementAt(i).toHtml();
-			if (html.matches("[\\s\\S]*.+kw:.+ie:'utf-8',rich_text:.+,floor_num:.+fid:.+[\\s\\S]*")) {
-				script = new StringBuffer(scriptList.elementAt(i).getChildren()
-						.toHtml());
+			if (html.indexOf("ie:'utf-8',rich_text:'1',floor_num:") != -1) {
+				script = new StringBuffer(scriptList.elementAt(i).toHtml());
 				break;
 			}
 		}
-		System.out.println(script);
+		// System.out.println(script);
 
 		StringBuffer dataStr = new StringBuffer(script.substring(
 				script.indexOf(",data :") + 7, script.indexOf("},radarData :")));
 		dataStr.delete(dataStr.indexOf("["), dataStr.indexOf("]") + 1);
 		JSONObject jsonObject = new JSONObject(dataStr.toString());
 		// System.out.println(jsonObject);
-		System.out.println("fid=" + jsonObject.getString("fid"));
+		// System.out.println("fid=" + jsonObject.getString("fid"));
 
 		fid = jsonObject.getString("fid");
 		return fid;
@@ -161,4 +157,19 @@ public class BaiduClientUtil {
 
 		return postList;
 	}
+
+	/**
+	 * 保存所有信息到本地
+	 */
+	public static void saveInfo() {
+
+	}
+
+	/**
+	 * 读取信息
+	 */
+	public static void readInfo() {
+
+	}
+
 }

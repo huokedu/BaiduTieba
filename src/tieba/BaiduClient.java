@@ -4,23 +4,25 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.List;
 
 import org.htmlparser.Parser;
 import org.htmlparser.filters.TagNameFilter;
 import org.htmlparser.util.NodeList;
+import org.htmlparser.util.ParserException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import tieba.bean.Post;
+import tieba.bean.TieBa;
+import tieba.bean.UserInfo;
 import tieba.util.BaiduClientUtil;
 import tieba.util.HtmlUtil;
 import tieba.util.HttpUtil;
@@ -35,52 +37,81 @@ public class BaiduClient {
 	/**
 	 * sessionId
 	 */
-	String baiduId;
-	String token;
+	private String baiduId;
+	private String token;
 
-	String stoken;
-	String ptoken;
-	String bduss;
-	String ubi;
-	String saveuserid;
+	private String stoken;
+	private String ptoken;
+	private String bduss;
+	private String ubi;
+	private String saveuserid;
 
-	String tieBaUserType;
-	String tieBaUId;
+	private String tieBaUserType;
+	private String tieBaUId;
 
-	boolean logined = false;
+	private boolean logined = false;
 
 	/**
-	 * 用户名
+	 * 登录类型(用户名、手机、邮箱登录)
 	 */
-	String userName;
-	/**
-	 * 密码
-	 */
-	String password;
+	private int loginType;
 
-	public BaiduClient(String userName, String password) {
+	public static final int USERNAMELOGIN = 1;// 用户名登录
+	public static final int PHONENUMBERLOGIN = 2;// 手机号码登录
+	public static final int MAILLOGIN = 3;// 邮箱登录
+	/**
+	 * 用户信息
+	 */
+	private UserInfo userInfo = new UserInfo();
+
+	public BaiduClient(String account, String password, int loginType)
+			throws Exception {
 		// TODO 自动生成的构造函数存根
-		this.userName = userName;
-		this.password = password;
+		userInfo.setAccount(account);
+		userInfo.setPassword(password);
+		this.loginType = loginType;
+
+		switch (loginType) {
+		case USERNAMELOGIN:
+			userInfo.setUserName(account);
+			break;
+		case PHONENUMBERLOGIN:
+			userInfo.setPhoneNumber(account);
+			break;
+		case MAILLOGIN:
+			userInfo.setMail(account);
+			break;
+		default:
+			throw new Exception("loginType error");
+
+		}
+
 	}
 
 	/**
-	 * 获取关注的贴吧列表
+	 * 获取关注贴吧列表
 	 * 
 	 * @return
 	 * @throws IOException
+	 * @throws ParserException
 	 */
-	public List<String> getTieBaList() throws IOException {
-		List<String> tieBaList = new ArrayList<>();
-		URL url = new URL("http://tieba.baidu.com/");
+	public List<TieBa> getTieBaList() throws IOException, ParserException {
+		List<TieBa> tieBaList = new ArrayList<>();
+		URL url = new URL("http://tieba.baidu.com/f/like/mylike");
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		connection.setRequestProperty("Cookie", createCookies());
 
 		Document document = Jsoup.parse(HtmlUtil.getRespondContent(connection));
-		Elements elements = document.getElementsByAttribute("data-likeflag");
+		Elements elements = document.getElementsByTag("a");
 
 		for (int i = 0; i < elements.size(); i++) {
-			System.out.println(elements.get(i).text());
+			Element element = elements.get(i);
+			if (!element.attr("class").equals(""))
+				continue;
+			TieBa tieBa = new TieBa();
+			tieBa.setName(element.attr("title"));
+			tieBaList.add(tieBa);
+			System.out.println(tieBa.getName());
 		}
 
 		return tieBaList;
@@ -141,10 +172,11 @@ public class BaiduClient {
 		writer.write(requestContent.toString());
 		writer.flush();
 
-		String respondContent = HtmlUtil.getRespondContent(connection);
-		JSONObject jsonObject = new JSONObject(respondContent);
+		JSONObject respondJson = new JSONObject(
+				HtmlUtil.getRespondContent(connection));
 
-		if (jsonObject.getInt("no") != 0) {
+		System.out.println(respondJson);
+		if (respondJson.getInt("no") != 0) {
 			System.out.println("签到失败");
 			return false;
 		}
@@ -185,6 +217,7 @@ public class BaiduClient {
 		return postList;
 	}
 
+	// fid即forum_id(一个贴吧对应一个)
 	/**
 	 * 根据帖子id进入帖子 返回参数fid和tbs
 	 * 
@@ -208,6 +241,7 @@ public class BaiduClient {
 		JSONObject jsonObject = new JSONObject();
 		jsonObject.put("fid", fid);
 		jsonObject.put("tbs", tbs);
+		jsonObject.put("tid", postId);
 
 		return jsonObject;
 	}
@@ -218,7 +252,7 @@ public class BaiduClient {
 	 * @param postId
 	 * @param msg
 	 */
-	public boolean reply(String tieBaName, long postId, String content,
+	public boolean replyPost(String tieBaName, long postId, String content,
 			String fid, String tbs) throws Exception {
 		URL url = new URL("http://tieba.baidu.com/f/commit/post/add");
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -259,6 +293,29 @@ public class BaiduClient {
 	}
 
 	/**
+	 * 获取用户信息
+	 * 
+	 * @throws IOException
+	 * @throws ParserException
+	 */
+	public void getUserInfo() throws IOException, ParserException {
+		URL url = new URL("http://tieba.baidu.com/f/user/json_userinfo");
+		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+		connection.setRequestProperty("Cookie", createCookies());
+
+		JSONObject respondJson = new JSONObject(
+				HtmlUtil.getRespondContent(connection));
+		JSONObject dataJson = respondJson.getJSONObject("data");
+		String userName = dataJson.getString("user_name_show");
+		String userPortrait = dataJson.getString("user_portrait");
+
+		userInfo.setUserName(userName);
+		userInfo.setUserPortrait(userPortrait);
+
+		System.out.println("用户名=" + userInfo.getUserName());
+	}
+
+	/**
 	 * 登录
 	 * 
 	 * @return
@@ -294,12 +351,12 @@ public class BaiduClient {
 		requestContent.append("&quick_user=0");
 		requestContent.append("&loginmerge=true");
 		requestContent.append("&logintype=basicLogin");
-		requestContent.append("&username=" + userName);
-		requestContent.append("&password=" + password);
 		requestContent.append("&verifycode=");
 		requestContent.append("&mem_pass=on");
 		requestContent.append("&ppui_logintime=18566");
 		requestContent.append("&callback=parent.bd__cbs__woepyg");
+		requestContent.append("&password=" + userInfo.getPassword());
+		requestContent.append("&username=" + userInfo.getAccount());
 
 		PrintWriter printWriter = new PrintWriter(connection.getOutputStream());
 		printWriter.write(requestContent.toString());
@@ -327,6 +384,8 @@ public class BaiduClient {
 			return false;
 		}
 		logined = true;
+		// 登录成功则获取用户信息
+		getUserInfo();
 		System.out.println("登录成功!");
 		return true;
 	}
@@ -406,6 +465,15 @@ public class BaiduClient {
 	 */
 	public boolean isLogined() {
 		return logined;
+	}
+
+	/**
+	 * 获取登录类型
+	 * 
+	 * @return
+	 */
+	public int getLoginType() {
+		return loginType;
 	}
 
 	/**

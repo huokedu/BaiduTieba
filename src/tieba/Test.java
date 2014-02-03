@@ -6,6 +6,7 @@ import java.util.List;
 import org.json.JSONObject;
 
 import tieba.bean.Post;
+import tieba.bean.TieBa;
 
 class T extends Thread {
 	BaiduClient client;
@@ -33,6 +34,9 @@ class T extends Thread {
 public class Test {
 
 	public static void main(String[] args) throws Exception {
+		
+		System.out.println(new String("\u6210\u529f"));
+		
 		// 要回复的内容
 		StringBuffer content = new StringBuffer();
 		content.append("2楼");
@@ -47,24 +51,17 @@ public class Test {
 
 		if (!client.isLogined())
 			return;
+		String tieBaName = "蒙其d小伟";
+		List<Post> posts = client.toTieBa(tieBaName);
 
-		client.getTieBaList();
+		JSONObject json = client.toPost(tieBaName, posts.get(0).getId());
 
-		// String tieBaName = "c";
-		//
-		// List<Post> postList = client.toTieBa(tieBaName);
-		// JSONObject jsonObject = client.toPost(tieBaName, postList.get(0)
-		// .getId());
-		// client.replyPost(tieBaName, postList.get(0).getId(),
-		// content.toString(), jsonObject.getString("fid"),
-		// jsonObject.getString("tbs"));
-		//
-		// System.out.println(jsonObject.get("fid"));
+		client.replyPost(tieBaName, posts.get(0).getId(), content.toString(),
+				json.getString("fid"), json.getString("tbs"));
 
-		String[] tieBaNames = { "华南农业大学", "java", "c语言", "行尸走肉第三季", "进击的巨人",
-				"李毅", "海贼王", "火影忍者", "越狱", "c++", "蒙其d小伟", "汇编", "javascript",
-				"j2ee", "golang", "ubuntu", "linux", "c#" };
+		// List<TieBa> tieBas = client.getTieBaList();
+		// for (int i = 0; i < tieBas.size(); i++)
+		// client.getSignInfo(tieBas.get(i).getName());
 
 	}
-
 }

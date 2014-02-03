@@ -1,7 +1,7 @@
 package tieba.bean;
 
 /**
- * 帖子实体类
+ * 帖子类
  * 
  * @author vincent
  * 

@@ -1,5 +1,7 @@
 package tieba;
 
+import java.awt.Image;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
@@ -9,6 +11,12 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Map;
+
+import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
 
 import org.htmlparser.Parser;
 import org.htmlparser.filters.TagNameFilter;
@@ -26,6 +34,7 @@ import tieba.bean.UserInfo;
 import tieba.util.BaiduClientUtil;
 import tieba.util.HtmlUtil;
 import tieba.util.HttpUtil;
+import tieba.util.PropertiesUtil;
 
 /**
  * 百度客户端类
@@ -39,7 +48,9 @@ public class BaiduClient {
 	 */
 	private String baiduId;
 	private String token;
-
+	/**
+	 * 各种要保存的cookie
+	 */
 	private String stoken;
 	private String ptoken;
 	private String bduss;
@@ -55,7 +66,6 @@ public class BaiduClient {
 	 * 登录类型(用户名、手机、邮箱登录)
 	 */
 	private int loginType;
-
 	public static final int USERNAMELOGIN = 1;// 用户名登录
 	public static final int PHONENUMBERLOGIN = 2;// 手机号码登录
 	public static final int MAILLOGIN = 3;// 邮箱登录
@@ -82,7 +92,7 @@ public class BaiduClient {
 			userInfo.setMail(account);
 			break;
 		default:
-			throw new Exception("loginType error");
+			throw new Exception("登录类型出错");
 
 		}
 
@@ -218,6 +228,7 @@ public class BaiduClient {
 	}
 
 	// fid即forum_id(一个贴吧对应一个)
+	// tbs即贴吧加密因子 由ui生成
 	/**
 	 * 根据帖子id进入帖子 返回参数fid和tbs
 	 * 
@@ -305,9 +316,9 @@ public class BaiduClient {
 
 		JSONObject respondJson = new JSONObject(
 				HtmlUtil.getRespondContent(connection));
-		JSONObject dataJson = respondJson.getJSONObject("data");
-		String userName = dataJson.getString("user_name_show");
-		String userPortrait = dataJson.getString("user_portrait");
+		JSONObject data = respondJson.getJSONObject("data");
+		String userName = data.getString("user_name_show");
+		String userPortrait = data.getString("user_portrait");
 
 		userInfo.setUserName(userName);
 		userInfo.setUserPortrait(userPortrait);
@@ -316,12 +327,28 @@ public class BaiduClient {
 	}
 
 	/**
+	 * 获取验证码图片
+	 * 
+	 * @param codeString
+	 * @return
+	 * @throws Exception
+	 */
+	public BufferedImage getCaptcha(String codeString) throws Exception {
+		URL url = new URL("https://passport.baidu.com/cgi-bin/genimage?"
+				+ codeString);
+		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+		connection.setRequestProperty("Cookie", "BAIDUID=" + baiduId);
+		BufferedImage image = ImageIO.read(connection.getInputStream());
+		return image;
+	}
+
+	/**
 	 * 登录
 	 * 
 	 * @return
 	 * @throws Exception
 	 */
-	public boolean login() throws Exception {
+	public Map<String, String> login() throws Exception {
 		// 登录前先获取baiduId,再通过baiduId获取token
 		System.out.println("---------开始获取baiduId---------");
 		getBaiduId();
@@ -373,21 +400,19 @@ public class BaiduClient {
 		System.out.println("cookies:" + cookies);
 
 		String respondContent = HtmlUtil.getRespondContent(connection);
-		System.out.println(respondContent);
+		// System.out.println(respondContent);
 
-		if (respondContent.indexOf("err_no") != -1)
-			System.out.println(respondContent.substring(respondContent
-					.indexOf("err_no")));
+		String kvStr = respondContent.substring(
+				respondContent.indexOf("?") + 1,
+				respondContent.lastIndexOf("\""));
 
-		if (respondContent.indexOf("err_no=0") == -1) {
-			System.out.println("登录失败!");
-			return false;
-		}
-		logined = true;
-		// 登录成功则获取用户信息
-		getUserInfo();
-		System.out.println("登录成功!");
-		return true;
+		Map<String, String> kvPair = PropertiesUtil.parse(kvStr);
+		System.out.println(kvPair);
+
+		if (kvPair.get("err_no").equals("0"))
+			logined = true;
+
+		return kvPair;
 	}
 
 	/**

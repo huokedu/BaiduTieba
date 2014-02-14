@@ -1,11 +1,14 @@
 package tieba.ui;
 
 import java.awt.BorderLayout;
+import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.List;
 import java.util.Map;
 
+import javax.jws.soap.SOAPBinding.Use;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -15,19 +18,25 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 
 import tieba.BaiduClient;
+import tieba.bean.TieBa;
+import tieba.bean.UserInfo;
 
 public class LoginFrame extends JFrame {
 
-	private JTextField account = new JTextField("13560457989");
-	private JPasswordField password = new JPasswordField("cwc19940302");
-	private JTextField verifycode = new JTextField();
-	private JLabel verifycodeImage = new JLabel();
+	private JTextField account = new JTextField("13822192563", 15);
+	private JPasswordField password = new JPasswordField("century", 15);
+	private JTextField verifyCode = new JTextField(6);
+	private JLabel verifyCodeImage = new JLabel();
 
 	private JButton login = new JButton("登录");
 	private JButton exit = new JButton("退出");
 
-	public LoginFrame() {
+	private BaiduClient baiduClient;
+
+	public LoginFrame() throws Exception {
 		// TODO 自动生成的构造函数存根
+		baiduClient = new BaiduClient(account.getText(), password.getText(),
+				BaiduClient.PHONENUMBERLOGIN);
 		initUi();
 		initListener();
 	}
@@ -38,24 +47,29 @@ public class LoginFrame extends JFrame {
 		setLocationRelativeTo(null);
 
 		JPanel mainPanel = new JPanel();
-		JPanel labelPanel = new JPanel();
-		JPanel textFieldPanel = new JPanel();
 
-		mainPanel.setLayout(new BorderLayout());
-		mainPanel.add(labelPanel, BorderLayout.WEST);
-		mainPanel.add(textFieldPanel, BorderLayout.CENTER);
+		JPanel panel1 = new JPanel();
+		JPanel panel2 = new JPanel();
+		JPanel panel3 = new JPanel();
 
-		GridLayout gridLayout = new GridLayout(3, 1, 50, 5);
+		mainPanel.setLayout(new GridLayout(3, 1));
+		mainPanel.add(panel1);
+		mainPanel.add(panel2);
+		mainPanel.add(panel3);
 
-		labelPanel.setLayout(gridLayout);
-		textFieldPanel.setLayout(gridLayout);
+		JLabel label1 = new JLabel("帐号：");
+		JLabel label2 = new JLabel("密码：");
+		JLabel label3 = new JLabel("验证码：");
 
-		labelPanel.add(new JLabel("帐号："));
-		textFieldPanel.add(account);
-		labelPanel.add(new JLabel("密码："));
-		textFieldPanel.add(password);
-		labelPanel.add(new JLabel("验证码："));
-		textFieldPanel.add(verifycode);
+		panel1.add(label1);
+		panel1.add(account);
+		panel2.add(label2);
+		panel2.add(password);
+		panel3.add(label3);
+		panel3.add(verifyCode);
+		panel3.add(verifyCodeImage);
+
+		verifyCode.setVisible(false);
 
 		JPanel buttonPanel = new JPanel();
 		buttonPanel.setLayout(new GridLayout(1, 2));
@@ -74,16 +88,28 @@ public class LoginFrame extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				// TODO 自动生成的方法存根
 				try {
-					BaiduClient baiduClient = new BaiduClient(
-							account.getText(), password.getText(),
-							BaiduClient.PHONENUMBERLOGIN);
+					baiduClient.setVerifyCode(verifyCode.getText());
+
 					Map<String, String> map = baiduClient.login();
 					// 若需要验证码
-					if (map.get("err_no").equals("257")) {
-						verifycodeImage.setIcon(new ImageIcon(baiduClient
+					if (!map.get("err_no").equals("0")) {
+
+						verifyCode.setVisible(true);
+
+						verifyCodeImage.setIcon(new ImageIcon(baiduClient
 								.getCaptcha(map.get("codeString"))));
+						System.out.println("登录失败");
 						return;
 					}
+
+					System.out.println("登录成功");
+
+					List<TieBa> tieBas = baiduClient.getTieBaList();
+
+					for (int i = 0; i < tieBas.size(); i++)
+						baiduClient.signIn(tieBas.get(i).getName());
+
+					baiduClient.getUserInfo();
 
 				} catch (Exception e1) {
 					// TODO 自动生成的 catch 块
@@ -94,7 +120,7 @@ public class LoginFrame extends JFrame {
 		});
 	}
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		LoginFrame loginFrame = new LoginFrame();
 		loginFrame.setVisible(true);
 	}

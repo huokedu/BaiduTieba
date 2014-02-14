@@ -62,6 +62,9 @@ public class BaiduClient {
 
 	private boolean logined = false;
 
+	private String codeString;
+	private String verifyCode;
+	private int loginCount = 0;// 登录次数
 	/**
 	 * 登录类型(用户名、手机、邮箱登录)
 	 */
@@ -324,6 +327,7 @@ public class BaiduClient {
 		userInfo.setUserPortrait(userPortrait);
 
 		System.out.println("用户名=" + userInfo.getUserName());
+
 	}
 
 	/**
@@ -333,12 +337,14 @@ public class BaiduClient {
 	 * @return
 	 * @throws Exception
 	 */
+
 	public BufferedImage getCaptcha(String codeString) throws Exception {
 		URL url = new URL("https://passport.baidu.com/cgi-bin/genimage?"
 				+ codeString);
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		connection.setRequestProperty("Cookie", "BAIDUID=" + baiduId);
 		BufferedImage image = ImageIO.read(connection.getInputStream());
+
 		return image;
 	}
 
@@ -350,10 +356,13 @@ public class BaiduClient {
 	 */
 	public Map<String, String> login() throws Exception {
 		// 登录前先获取baiduId,再通过baiduId获取token
-		System.out.println("---------开始获取baiduId---------");
-		getBaiduId();
-		System.out.println("----------开始获取token----------");
-		getToken();
+		if (loginCount == 0) {
+			System.out.println("---------开始获取baiduId---------");
+			getBaiduId();
+			System.out.println("----------开始获取token----------");
+			getToken();
+		}
+		loginCount++;
 		System.out.println("--------------开始登录---------------");
 
 		URL url = new URL("https://passport.baidu.com/v2/api/?login");
@@ -371,14 +380,14 @@ public class BaiduClient {
 		requestContent.append("&tpl=pp");
 		requestContent.append("&apiver=v3");
 		requestContent.append("&tt=" + getSystemTime());
-		requestContent.append("&codestring=");
+		requestContent.append("&codestring=" + codeString);
 		requestContent.append("&safeflg=0");
 		requestContent.append("&u=" + encode(u));
 		requestContent.append("&isPhone=false");
 		requestContent.append("&quick_user=0");
 		requestContent.append("&loginmerge=true");
 		requestContent.append("&logintype=basicLogin");
-		requestContent.append("&verifycode=");
+		requestContent.append("&verifycode=" + verifyCode);
 		requestContent.append("&mem_pass=on");
 		requestContent.append("&ppui_logintime=18566");
 		requestContent.append("&callback=parent.bd__cbs__woepyg");
@@ -411,6 +420,9 @@ public class BaiduClient {
 
 		if (kvPair.get("err_no").equals("0"))
 			logined = true;
+
+		else
+			codeString = kvPair.get("codeString");
 
 		return kvPair;
 	}
@@ -499,6 +511,10 @@ public class BaiduClient {
 	 */
 	public int getLoginType() {
 		return loginType;
+	}
+
+	public void setVerifyCode(String verifyCode) {
+		this.verifyCode = verifyCode;
 	}
 
 	/**

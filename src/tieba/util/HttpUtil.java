@@ -1,4 +1,5 @@
 package tieba.util;
+
 import java.net.HttpURLConnection;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,7 @@ public class HttpUtil {
 	 * @return
 	 */
 	public static String getCookieValue(List<String> cookies, String cookieName) {
-		for (int i = 0; i < cookies.size(); i++)
+		for (int i = cookies.size() - 1; i >= 0; i--)
 			if (cookies.get(i).indexOf(cookieName) != -1) {
 				String cookie = cookies.get(i);
 				String value = cookie.substring(cookie.indexOf("=") + 1,
